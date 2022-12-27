@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "http-request",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tomislaveric/http-request",
+      "state" : {
+        "branch" : "main",
+        "revision" : "0f2b24c95adb78634fc41005c2a84109a8469bc8"
+      }
+    }
+  ],
+  "version" : 2
+}
