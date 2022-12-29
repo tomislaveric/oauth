@@ -3,17 +3,23 @@ import AuthenticationServices
 import HTTPRequest
 
 public protocol OAuth {
-    func authorize() async throws -> String?
+    func getAccessToken() async throws -> String?
 }
 
 public struct OAuthConfig {
-    public init(authorizeUrl: String, tokenUrl: String, clientId: String, redirectUri: String, callbackURLScheme: String, clientSecret: String) {
+    public init(authorizeUrl: String, tokenUrl: String, clientId: String, redirectUri: String, callbackURLScheme: String, clientSecret: String, scope: String) {
         self.authorizeUrl = authorizeUrl
         self.tokenUrl = tokenUrl
         self.clientId = clientId
         self.redirectUri = redirectUri
         self.callbackURLScheme = callbackURLScheme
         self.clientSecret = clientSecret
+        self.scope = scope
+    }
+    
+    public enum GrantType: String {
+        case authorizationCode = "authorization_code"
+        case refreshToken = "refresh_token"
     }
     
     public let authorizeUrl: String
@@ -24,29 +30,39 @@ public struct OAuthConfig {
     public let clientSecret: String
     public let responseType: String = "code"
     public let approvalPrompt: String = "auto"
-    public let grantType: String = "authorization_code"
-    public let scope: String = "activity:write,read"
+    public let grantType: GrantType = .authorizationCode
+    public let scope: String
 }
 
 public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextProviding {
     private let httpRequest: HTTPRequest
     private let config: OAuthConfig
+    private var token: Token? = nil
     
-    public init(config: OAuthConfig, session: URLSession? = nil) {
+    public init(config: OAuthConfig) {
         self.config = config
-        if let session = session {
-            self.httpRequest = HTTPRequestImpl(session: session)
-        } else {
-            self.httpRequest = HTTPRequestImpl()
-        }
+        self.httpRequest = HTTPRequestImpl()
     }
     
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         return ASPresentationAnchor()
     }
     
+    public func getAccessToken() async throws -> String? {
+        //TODO: check for expiration as well
+        if let token = self.token {
+            return buildBearerToken(from: token)
+        } else {
+            //handle refresh token
+        }
+       
+        guard let token = try await authorize() else { return nil }
+        self.token = token
+        return buildBearerToken(from: token)
+    }
+    
     @MainActor
-    public func authorize() async throws -> String? {
+    private func authorize() async throws -> Token? {
         guard let url = self.buildAuthUrl(from: config) else { return nil }
         
         let authUrl = try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
@@ -64,17 +80,18 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
                 authSession.start()
             })
         
-        guard let token = try await getToken(from: authUrl) else { return nil }
-        return "\(token.token_type) \(token.access_token)"
+        return try await getToken(from: buildAccessTokenUrl(from: authUrl))
     }
     
-    private func getToken(from authUrl: URL) async throws -> Token? {
-        guard let tokenUrl = buildTokenUrl(from: authUrl) else { return nil }
-        let request = URLRequest(url: tokenUrl)
+    private func getToken(from url: URL?) async throws -> Token? {
+        guard let url = url else {
+            throw OAuthError.badUrlError
+        }
+        let request = URLRequest(url: url)
         return try await httpRequest.post(request: request)
     }
     
-    private func buildTokenUrl(from authResponse: URL) -> URL? {
+    private func buildAccessTokenUrl(from authResponse: URL) -> URL? {
         guard let authComponents = URLComponents(url: authResponse, resolvingAgainstBaseURL: true) else { return nil }
         let authToken = authComponents.queryItems?.first(where: { $0.name == self.config.responseType })?.value
         
@@ -83,9 +100,20 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
             URLQueryItem(name: "client_id", value: config.clientId),
             URLQueryItem(name: "client_secret", value: config.clientSecret),
             URLQueryItem(name: "code", value: authToken),
-            URLQueryItem(name: "grant_type", value: config.grantType)
+            URLQueryItem(name: "scope", value: config.scope),
+            URLQueryItem(name: "grant_type", value: OAuthConfig.GrantType.authorizationCode.rawValue)
         ]
-        
+        return components?.url
+    }
+    
+    private func buildRefreshTokenUrl(from token: Token) -> URL? {
+        var components = URLComponents(string: config.tokenUrl)
+        components?.queryItems = [
+            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "client_secret", value: config.clientSecret),
+            URLQueryItem(name: "refresh_token", value: token.refresh_token),
+            URLQueryItem(name: "grant_type", value: OAuthConfig.GrantType.refreshToken.rawValue)
+        ]
         return components?.url
     }
     
@@ -97,8 +125,11 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
             URLQueryItem(name: "response_type", value: config.responseType),
             URLQueryItem(name: "scope", value: config.scope)
         ]
-       
         return components?.url
+    }
+    
+    private func buildBearerToken(from token: Token) -> String {
+        return "\(token.token_type) \(token.access_token)"
     }
 }
 
