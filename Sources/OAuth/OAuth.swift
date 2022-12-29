@@ -38,19 +38,19 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         guard let url = self.buildAuthUrl(from: config) else { return nil }
         
         let authUrl = try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
-                let authSession = ASWebAuthenticationSession(
-                    url: url,
-                    callbackURLScheme: self.config.callbackURLScheme) { url, error in
-                        if let url = url {
-                            continuation.resume(returning: url)
-                        } else if let error = error {
-                            continuation.resume(throwing: error)
-                        }
+            let authSession = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: self.config.callbackURLScheme) { url, error in
+                    if let url = url {
+                        continuation.resume(returning: url)
+                    } else if let error = error {
+                        continuation.resume(throwing: error)
                     }
-                authSession.presentationContextProvider = self
-                authSession.prefersEphemeralWebBrowserSession = true
-                authSession.start()
-            })
+                }
+            authSession.presentationContextProvider = self
+            authSession.prefersEphemeralWebBrowserSession = true
+            authSession.start()
+        })
         
         return try await getToken(from: buildAccessTokenUrl(from: authUrl))
     }
