@@ -6,38 +6,10 @@ public protocol OAuth {
     func getAccessToken() async throws -> String?
 }
 
-public struct OAuthConfig {
-    public init(authorizeUrl: String, tokenUrl: String, clientId: String, redirectUri: String, callbackURLScheme: String, clientSecret: String, scope: String) {
-        self.authorizeUrl = authorizeUrl
-        self.tokenUrl = tokenUrl
-        self.clientId = clientId
-        self.redirectUri = redirectUri
-        self.callbackURLScheme = callbackURLScheme
-        self.clientSecret = clientSecret
-        self.scope = scope
-    }
-    
-    public enum GrantType: String {
-        case authorizationCode = "authorization_code"
-        case refreshToken = "refresh_token"
-    }
-    
-    public let authorizeUrl: String
-    public let tokenUrl: String
-    public let clientId: String
-    public let redirectUri: String
-    public let callbackURLScheme: String
-    public let clientSecret: String
-    public let responseType: String = "code"
-    public let approvalPrompt: String = "auto"
-    public let grantType: GrantType = .authorizationCode
-    public let scope: String
-}
-
 public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextProviding {
     private let httpRequest: HTTPRequest
     private let config: OAuthConfig
-    private var token: Token? = nil
+    private var token: TokenResponse? = nil
     
     public init(config: OAuthConfig) {
         self.config = config
@@ -62,7 +34,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
     }
     
     @MainActor
-    private func authorize() async throws -> Token? {
+    private func authorize() async throws -> TokenResponse? {
         guard let url = self.buildAuthUrl(from: config) else { return nil }
         
         let authUrl = try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
@@ -83,7 +55,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         return try await getToken(from: buildAccessTokenUrl(from: authUrl))
     }
     
-    private func getToken(from url: URL?) async throws -> Token? {
+    private func getToken(from url: URL?) async throws -> TokenResponse? {
         guard let url = url else {
             throw OAuthError.badUrlError
         }
@@ -101,18 +73,18 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
             URLQueryItem(name: "client_secret", value: config.clientSecret),
             URLQueryItem(name: "code", value: authToken),
             URLQueryItem(name: "scope", value: config.scope),
-            URLQueryItem(name: "grant_type", value: OAuthConfig.GrantType.authorizationCode.rawValue)
+            URLQueryItem(name: "grant_type", value: config.authorizationGrant)
         ]
         return components?.url
     }
     
-    private func buildRefreshTokenUrl(from token: Token) -> URL? {
+    private func buildRefreshTokenUrl(from token: TokenResponse) -> URL? {
         var components = URLComponents(string: config.tokenUrl)
         components?.queryItems = [
             URLQueryItem(name: "client_id", value: config.clientId),
             URLQueryItem(name: "client_secret", value: config.clientSecret),
             URLQueryItem(name: "refresh_token", value: token.refresh_token),
-            URLQueryItem(name: "grant_type", value: OAuthConfig.GrantType.refreshToken.rawValue)
+            URLQueryItem(name: "grant_type", value: config.refreshGrant)
         ]
         return components?.url
     }
@@ -128,19 +100,11 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         return components?.url
     }
     
-    private func buildBearerToken(from token: Token) -> String {
+    private func buildBearerToken(from token: TokenResponse) -> String {
         return "\(token.token_type) \(token.access_token)"
     }
 }
 
 enum OAuthError: Error {
     case badUrlError
-}
-
-struct Token: Decodable {
-    let token_type: String
-    let expires_at: Int
-    let expires_in: Int
-    let refresh_token: String
-    let access_token: String
 }
