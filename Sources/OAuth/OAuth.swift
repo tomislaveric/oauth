@@ -7,13 +7,13 @@ public protocol OAuth {
 }
 
 public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextProviding {
-    private let httpRequest: HTTPRequest
+    private let request: HTTPRequest
     private let config: OAuthConfig
     private var token: TokenResponse? = nil
     
-    public init(config: OAuthConfig) {
+    public init(config: OAuthConfig, request: HTTPRequest = HTTPRequestImpl()) {
         self.config = config
-        self.httpRequest = HTTPRequestImpl()
+        self.request = request
     }
     
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -59,8 +59,8 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         guard let url = url else {
             throw OAuthError.badUrlError
         }
-        let request = URLRequest(url: url)
-        return try await httpRequest.post(request: request)
+        let urlRequest = URLRequest(url: url)
+        return try await request.post(request: urlRequest)
     }
     
     private func buildAccessTokenUrl(from authResponse: URL) -> URL? {
