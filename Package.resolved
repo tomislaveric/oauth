@@ -3,10 +3,10 @@
     {
       "identity" : "http-request",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tomislaveric/http-request",
+      "location" : "https://github.com/tomislaveric/http-request.git",
       "state" : {
         "branch" : "main",
-        "revision" : "0f2b24c95adb78634fc41005c2a84109a8469bc8"
+        "revision" : "a6fa794b6ebbc63edf0d1a69edb2928510a4bb0b"
       }
     }
   ],
