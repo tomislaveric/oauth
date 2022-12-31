@@ -9,7 +9,7 @@ struct TokenResponse: Decodable {
 }
 
 struct Token: Codable {
-    let expiresAt: Int
+    let expiresAt: Double
     let refreshToken: String
     let accessToken: String
 }

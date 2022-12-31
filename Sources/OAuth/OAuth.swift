@@ -7,10 +7,10 @@ public protocol OAuth {
 }
 
 public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextProviding {
-    private let storeName = "oAuthToken"
+    private let storeName = Bundle.main.bundleIdentifier ?? "Stravatar oAuthToken"
     private let request: HTTPRequest
     private let config: OAuthConfig
-    private let secureStorage: SecureStorage
+    private let secureStorage: KeychainStorage
     
     private func getSaved(token name: String) -> Token? {
         do {
@@ -21,11 +21,11 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
     }
     
     private func save(response: TokenResponse) throws {
-        let token = Token(expiresAt: Int(Date().timeIntervalSince1970) + response.expires_in, refreshToken: response.refresh_token, accessToken: response.access_token)
+        let token = Token(expiresAt: Date().addingTimeInterval(TimeInterval(response.expires_in)).timeIntervalSince1970, refreshToken: response.refresh_token, accessToken: response.access_token)
         try secureStorage.save(name: storeName, object: token)
     }
     
-    public init(config: OAuthConfig, request: HTTPRequest = HTTPRequestImpl(), secureStorage: SecureStorage = SecureStorageImpl()) {
+    public init(config: OAuthConfig, request: HTTPRequest = HTTPRequestImpl(), secureStorage: KeychainStorage = KeychainStorageImpl()) {
         self.config = config
         self.request = request
         self.secureStorage = secureStorage
@@ -36,7 +36,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
     }
     
     public func getAccessToken() async throws -> String? {
-        if let token = getSaved(token: storeName), token.expiresAt > Int(Date().timeIntervalSince1970) {
+        if let token = getSaved(token: storeName), token.expiresAt > Date().timeIntervalSince1970 {
             return buildBearerToken(from: token.accessToken)
         } else if let token = getSaved(token: storeName), let refreshToken = try await getToken(from: buildRefreshTokenUrl(from: token)) {
             try save(response: refreshToken)
@@ -124,12 +124,12 @@ enum OAuthError: Error {
     case badUrlError
 }
 
-public protocol SecureStorage {
+public protocol KeychainStorage {
     func save<Object: Encodable>(name: String, object: Object) throws
     func read<Object: Decodable>(name: String) throws -> Object?
 }
 
-public class SecureStorageImpl: SecureStorage {
+public class KeychainStorageImpl: KeychainStorage {
     private let userDefaults: UserDefaults
     
     public init(userDefaults: UserDefaults = UserDefaults.standard) {
@@ -137,13 +137,35 @@ public class SecureStorageImpl: SecureStorage {
     }
 
     public func read<Object: Decodable>(name: String) throws -> Object? {
-        guard let result = self.userDefaults.data(forKey: name) else { return nil }
+        
+        let query = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrAccount: name,
+            kSecReturnAttributes: true,
+            kSecReturnData: true,
+        ] as CFDictionary
+       
+        var ref: AnyObject?
+        SecItemCopyMatching(query, &ref)
+        guard let dictionary = ref as? NSDictionary else { return nil }
+        guard let result = dictionary[kSecValueData] as? Data else { return nil }
         return try JSONDecoder().decode(Object.self, from: result)
     }
     
     public func save<Object: Encodable>(name: String, object: Object) throws {
-        
+ 
         let objectData = try JSONEncoder().encode(object)
-        self.userDefaults.set(objectData, forKey: name)
+        let query = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrAccount: name,
+            kSecValueData: objectData
+        ] as CFDictionary
+        Task {
+            SecItemAdd(query as CFDictionary, nil)
+        }
     }
+}
+
+enum KeychainError: Error {
+    case unhandledError(status: OSStatus)
 }
