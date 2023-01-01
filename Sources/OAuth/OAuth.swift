@@ -3,8 +3,6 @@ import AuthenticationServices
 import HTTPRequest
 
 public protocol OAuth {
-    func authorize() async throws -> Token?
-    func refresh(token: Token) async throws -> Token?
     func getAccessToken(currentToken: Token?) async throws -> Token?
 }
 
@@ -33,12 +31,12 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         }
     }
 
-    public func refresh(token: Token) async throws -> Token? {
+    private func refresh(token: Token) async throws -> Token? {
         try await getToken(from: buildRefreshTokenUrl(from: token))
     }
     
     @MainActor
-    public func authorize() async throws -> Token? {
+    private func authorize() async throws -> Token? {
         guard let url = self.buildAuthUrl(from: config) else { return nil }
         
         let authUrl = try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
