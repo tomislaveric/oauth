@@ -38,8 +38,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
     @MainActor
     private func authorize() async throws -> Token? {
         guard let url = self.buildAuthUrl(from: config) else { return nil }
-        
-        return try await getToken(from: try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
+        return try await getToken(from: buildAccessTokenUrl(from: try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<URL, Error>) in
             let authSession = ASWebAuthenticationSession(
                 url: url,
                 callbackURLScheme: self.config.callbackURLScheme) { url, error in
@@ -52,7 +51,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
             authSession.presentationContextProvider = self
             authSession.prefersEphemeralWebBrowserSession = true
             authSession.start()
-        }))
+        })))
     }
     
     private func isValid(token: Token) -> Bool {
