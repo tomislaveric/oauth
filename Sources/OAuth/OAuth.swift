@@ -59,11 +59,7 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
     }
         
     private func getToken(from url: URL?) async throws -> Token? {
-        guard let url = url else {
-            throw OAuthError.badUrlError
-        }
-        let urlRequest = URLRequest(url: url)
-        return try await request.post(request: urlRequest)
+        return try await request.post(url: url, header: nil)
     }
     
     private func buildAccessTokenUrl(from authResponse: URL) -> URL? {
@@ -102,8 +98,4 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         ]
         return components?.url
     }
-}
-
-enum OAuthError: Error {
-    case badUrlError
 }
