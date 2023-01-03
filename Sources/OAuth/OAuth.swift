@@ -7,7 +7,6 @@ public protocol OAuth {
 }
 
 public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextProviding {
-    private let storeName = Bundle.main.bundleIdentifier ?? "Stravatar oAuthToken"
     private let request: HTTPRequest
     private let config: OAuthConfig
     
