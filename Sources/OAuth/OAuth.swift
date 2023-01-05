@@ -4,7 +4,7 @@ import HTTPRequest
 
 public protocol OAuth {
     func authorize(authUrl url: URL) async throws -> URL
-    func getAccessToken<TokenType: Decodable>(currentToken: TokenType?, accessUrl: URL?) async throws -> TokenType?
+    func getAccessToken<TokenType: Decodable>(currentToken: TokenType?, accessUrl: URL?) async throws -> TokenType
     func refreshToken<TokenType: Decodable>(refreshUrl: URL) async throws -> TokenType
 }
 
@@ -25,11 +25,14 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
         return response
     }
     
-    public func getAccessToken<TokenType: Decodable>(currentToken: TokenType?, accessUrl: URL?) async throws -> TokenType? {
+    public func getAccessToken<TokenType: Decodable>(currentToken: TokenType?, accessUrl: URL?) async throws -> TokenType {
         if let token = currentToken {
             return token
         }
-        return try await getToken(from: accessUrl)
+        guard let response: TokenType = try await getToken(from: accessUrl) else {
+            throw OAuthError.couldNotFetchAccessToken
+        }
+        return response
     }
 
     @MainActor
@@ -61,4 +64,5 @@ public class OAuthImpl: NSObject, OAuth, ASWebAuthenticationPresentationContextP
 
 enum OAuthError: Error {
     case couldNotFetchRefreshToken
+    case couldNotFetchAccessToken
 }
